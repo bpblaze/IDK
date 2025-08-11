@@ -3,89 +3,186 @@ local Player = Players.LocalPlayer
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
-local GuiService = game:GetService("GuiService")
-
--- Show loading notification
-game.StarterGui:SetCore("SendNotification", {
-    Title = "AIMLOCK SYSTEM",
-    Text = "Loading...",
-    Duration = 3,
-    Icon = "rbxassetid://4457731826"
-})
-
--- Wait for character
-repeat task.wait() until Player.Character
-local Humanoid = Player.Character:WaitForChild("Humanoid")
 
 -- Mobile detection
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
--- Aimlock Settings
+-- Create the permanent UI (only once)
+local function CreatePermanentUI()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "PermanentAimlockUI"
+    screenGui.ResetOnSpawn = false  -- This keeps it visible through respawns
+    screenGui.Parent = Player:WaitForChild("PlayerGui")
+
+    -- Main container frame
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 320, 0, 280)
+    frame.Position = UDim2.new(0.5, -160, 0.5, -140)
+    frame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    frame.BorderColor3 = Color3.fromRGB(30, 30, 30)
+    frame.Active = true
+    frame.Draggable = true
+    frame.Parent = screenGui
+
+    -- Top bar with gradient
+    local topBar = Instance.new("Frame")
+    topBar.Size = UDim2.new(1, 0, 0, 35)
+    topBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    topBar.Parent = frame
+
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 0, 120)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 0, 60))
+    })
+    gradient.Rotation = 90
+    gradient.Parent = topBar
+
+    -- Title and close button
+    local title = Instance.new("TextLabel")
+    title.Text = "AIM LOCK"
+    title.Size = UDim2.new(1, 0, 1, 0)
+    title.BackgroundTransparency = 1
+    title.TextColor3 = Color3.new(1, 1, 1)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 14
+    title.Parent = topBar
+
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Text = "✕"
+    closeBtn.Size = UDim2.new(0, 30, 0, 30)
+    closeBtn.Position = UDim2.new(1, -30, 0, 0)
+    closeBtn.BackgroundTransparency = 1
+    closeBtn.TextColor3 = Color3.new(1, 1, 1)
+    closeBtn.Font = Enum.Font.Gotham
+    closeBtn.Parent = topBar
+
+    -- Hotkey selector
+    local hotkeyFrame = Instance.new("Frame")
+    hotkeyFrame.Size = UDim2.new(0.9, 0, 0, 40)
+    hotkeyFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
+    hotkeyFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    hotkeyFrame.Parent = frame
+
+    local hotkeyLabel = Instance.new("TextLabel")
+    hotkeyLabel.Text = "HOTKEY"
+    hotkeyLabel.Size = UDim2.new(0.4, 0, 1, 0)
+    hotkeyLabel.BackgroundTransparency = 1
+    hotkeyLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+    hotkeyLabel.Font = Enum.Font.Gotham
+    hotkeyLabel.TextXAlignment = Enum.TextXAlignment.Left
+    hotkeyLabel.Parent = hotkeyFrame
+
+    local hotkeyBtn = Instance.new("TextButton")
+    hotkeyBtn.Text = isMobile and "[TAP BUTTON]" or "[F]"
+    hotkeyBtn.Size = UDim2.new(0.5, 0, 0.8, 0)
+    hotkeyBtn.Position = UDim2.new(0.5, 0, 0.1, 0)
+    hotkeyBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    hotkeyBtn.TextColor3 = Color3.new(1, 1, 1)
+    hotkeyBtn.Font = Enum.Font.GothamBold
+    hotkeyBtn.Parent = hotkeyFrame
+
+    -- Status display
+    local statusFrame = Instance.new("Frame")
+    statusFrame.Size = UDim2.new(0.9, 0, 0, 80)
+    statusFrame.Position = UDim2.new(0.05, 0, 0.4, 0)
+    statusFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    statusFrame.Parent = frame
+
+    local statusLabel = Instance.new("TextLabel")
+    statusLabel.Text = "STATUS: READY"
+    statusLabel.Size = UDim2.new(1, 0, 0.4, 0)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    statusLabel.Font = Enum.Font.Gotham
+    statusLabel.Parent = statusFrame
+
+    local targetLabel = Instance.new("TextLabel")
+    targetLabel.Text = "TARGET: NONE"
+    targetLabel.Size = UDim2.new(1, 0, 0.4, 0)
+    targetLabel.Position = UDim2.new(0, 0, 0.5, 0)
+    targetLabel.BackgroundTransparency = 1
+    targetLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    targetLabel.Font = Enum.Font.Gotham
+    targetLabel.Parent = statusFrame
+
+    -- Mobile lock button (floating)
+    if isMobile then
+        local mobileBtn = Instance.new("TextButton")
+        mobileBtn.Name = "MobileLockButton"
+        mobileBtn.Text = "🔒\nLOCK"
+        mobileBtn.Size = UDim2.new(0, 80, 0, 80)
+        mobileBtn.Position = UDim2.new(1, -90, 1, -90)
+        mobileBtn.AnchorPoint = Vector2.new(1, 1)
+        mobileBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        mobileBtn.TextColor3 = Color3.new(1, 1, 1)
+        mobileBtn.Font = Enum.Font.GothamBold
+        mobileBtn.TextSize = 14
+        mobileBtn.ZIndex = 10
+        mobileBtn.Parent = screenGui
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(1, 0)
+        corner.Parent = mobileBtn
+    end
+
+    return {
+        ScreenGui = screenGui,
+        HotkeyButton = hotkeyBtn,
+        StatusLabel = statusLabel,
+        TargetLabel = targetLabel,
+        MobileButton = isMobile and screenGui:FindFirstChild("MobileLockButton") or nil,
+        CloseButton = closeBtn
+    }
+end
+
+-- Initialize permanent UI
+local UI = CreatePermanentUI()
+
+-- Aimlock system
 local Aimlock = {
     Enabled = false,
     Target = nil,
-    Hotkey = isMobile and nil or Enum.KeyCode.F, -- No hotkey on mobile
+    Hotkey = isMobile and nil or Enum.KeyCode.F,
     LockPart = "Head",
-    MaxDistance = 1000,
-    FOV = 35, -- Slightly wider FOV for mobile
-    Notifications = true,
-    TouchButton = nil -- For mobile controls
+    FOV = 35,
+    Notifications = true
 }
 
--- Create mobile button if needed
-if isMobile then
-    local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "AimlockMobileUI"
-    ScreenGui.Parent = Player.PlayerGui
+-- Character setup function
+local function SetupCharacter()
+    repeat task.wait() until Player.Character
+    local humanoid = Player.Character:WaitForChild("Humanoid")
     
-    Aimlock.TouchButton = Instance.new("TextButton")
-    Aimlock.TouchButton.Text = "🔒\nAIMLOCK"
-    Aimlock.TouchButton.Size = UDim2.new(0, 80, 0, 80)
-    Aimlock.TouchButton.Position = UDim2.new(1, -90, 1, -90)
-    Aimlock.TouchButton.AnchorPoint = Vector2.new(1, 1)
-    Aimlock.TouchButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    Aimlock.TouchButton.TextColor3 = Color3.new(1, 1, 1)
-    Aimlock.TouchButton.Font = Enum.Font.GothamBold
-    Aimlock.TouchButton.TextSize = 14
-    Aimlock.TouchButton.ZIndex = 10
-    Aimlock.TouchButton.Parent = ScreenGui
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(1, 0)
-    corner.Parent = Aimlock.TouchButton
-    
-    -- Touch button functionality
-    Aimlock.TouchButton.MouseButton1Click:Connect(function()
-        Aimlock.Enabled = not Aimlock.Enabled
-        
-        if Aimlock.Enabled then
-            Aimlock.Target = GetTargetUnderCrosshair()
-            if Aimlock.Target then
-                ShowNotification("🔒 Locked: "..Aimlock.Target.Name)
-                Aimlock.TouchButton.BackgroundColor3 = Color3.fromRGB(80, 0, 120)
-            else
-                Aimlock.Enabled = false
-                ShowNotification("No target in sight")
-                Aimlock.TouchButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-            end
-        else
-            ReleaseLock()
-            Aimlock.TouchButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    -- Reset aimlock state on respawn
+    if Aimlock.Enabled then
+        Aimlock.Enabled = false
+        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+        humanoid.AutoRotate = true
+        UI.StatusLabel.Text = "STATUS: READY"
+        UI.TargetLabel.Text = "TARGET: NONE"
+        if UI.MobileButton then
+            UI.MobileButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
         end
-    end)
+    end
 end
 
--- Notification wrapper
+-- Handle character respawns
+Player.CharacterAdded:Connect(SetupCharacter)
+SetupCharacter() -- Initial setup
+
+-- Notification function
 local function ShowNotification(message)
-    if not Aimlock.Notifications then return end
-    game.StarterGui:SetCore("SendNotification", {
-        Title = "AIMLOCK",
-        Text = message,
-        Duration = 2
-    })
+    if Aimlock.Notifications then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "AIMLOCK",
+            Text = message,
+            Duration = 2
+        })
+    end
 end
 
--- Get player you're aiming at
+-- Target finding function
 local function GetTargetUnderCrosshair()
     local closestPlayer, closestAngle = nil, math.rad(Aimlock.FOV)
     local viewportSize = Camera.ViewportSize
@@ -113,93 +210,74 @@ local function GetTargetUnderCrosshair()
     return closestPlayer
 end
 
--- Release lock function
-local function ReleaseLock()
-    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-    if Humanoid then
-        Humanoid.AutoRotate = true
-    end
-end
-
--- Strong lock function
-local function ApplyLock()
-    if not Aimlock.Enabled or not Aimlock.Target then return end
+-- Toggle aimlock function
+local function ToggleAimlock()
+    Aimlock.Enabled = not Aimlock.Enabled
     
-    local targetPart = Aimlock.Target.Character:FindFirstChild(Aimlock.LockPart)
-    if not targetPart then
+    if Aimlock.Enabled then
         Aimlock.Target = GetTargetUnderCrosshair()
-        return
-    end
-    
-    -- Force camera lock
-    Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPart.Position)
-    
-    -- Disable mouse movement
-    UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
-    if Humanoid then
-        Humanoid.AutoRotate = false
+        if Aimlock.Target then
+            UI.StatusLabel.Text = "STATUS: LOCKED"
+            UI.TargetLabel.Text = "TARGET: "..Aimlock.Target.Name
+            ShowNotification("Locked: "..Aimlock.Target.Name)
+            if UI.MobileButton then
+                UI.MobileButton.BackgroundColor3 = Color3.fromRGB(80, 0, 120)
+            end
+        else
+            Aimlock.Enabled = false
+            ShowNotification("No target found")
+        end
+    else
+        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+        if Player.Character and Player.Character:FindFirstChildOfClass("Humanoid") then
+            Player.Character:FindFirstChildOfClass("Humanoid").AutoRotate = true
+        end
+        UI.StatusLabel.Text = "STATUS: READY"
+        UI.TargetLabel.Text = "TARGET: NONE"
+        ShowNotification("Aimlock disabled")
+        if UI.MobileButton then
+            UI.MobileButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        end
     end
 end
 
--- PC hotkey system
-if not isMobile then
+-- Connect controls
+if isMobile then
+    UI.MobileButton.MouseButton1Click:Connect(ToggleAimlock)
+else
     UserInputService.InputBegan:Connect(function(input, processed)
         if input.KeyCode == Aimlock.Hotkey and not processed then
-            Aimlock.Enabled = not Aimlock.Enabled
-            
-            if Aimlock.Enabled then
-                Aimlock.Target = GetTargetUnderCrosshair()
-                if Aimlock.Target then
-                    ShowNotification("🔒 Locked: "..Aimlock.Target.Name)
-                else
-                    Aimlock.Enabled = false
-                    ShowNotification("No target in sight")
-                end
-            else
-                ReleaseLock()
-                ShowNotification("Aimlock disabled")
-            end
+            ToggleAimlock()
         end
     end)
 end
 
--- Main loop
-RunService.RenderStepped:Connect(function()
-    if Aimlock.Enabled then
-        -- Refresh target if lost
-        if not Aimlock.Target or not Aimlock.Target.Character then
-            Aimlock.Target = GetTargetUnderCrosshair()
-        end
-        
-        ApplyLock()
+UI.CloseButton.MouseButton1Click:Connect(function()
+    UI.ScreenGui.Enabled = false
+    if isMobile and UI.MobileButton then
+        UI.MobileButton.Visible = false
     end
 end)
 
--- Status UI
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AimlockStatusUI"
-ScreenGui.Parent = Player.PlayerGui
-
-local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Text = isMobile and "AIMLOCK: READY (Tap Button)" or "AIMLOCK: INACTIVE (Press F)"
-StatusLabel.Size = UDim2.new(0, 250, 0, 40)
-StatusLabel.Position = UDim2.new(0.5, -125, 0, 10)
-StatusLabel.AnchorPoint = Vector2.new(0.5, 0)
-StatusLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-StatusLabel.BackgroundTransparency = 0.7
-StatusLabel.TextColor3 = Color3.new(1, 1, 1)
-StatusLabel.Font = Enum.Font.GothamBold
-StatusLabel.TextSize = 14
-StatusLabel.Parent = ScreenGui
-
--- Update UI
-while true do
+-- Main aimlock loop
+RunService.RenderStepped:Connect(function()
     if Aimlock.Enabled then
-        StatusLabel.Text = "LOCKED: "..(Aimlock.Target and Aimlock.Target.Name or "SEARCHING...")
-        StatusLabel.TextColor3 = Color3.new(0, 1, 0)
-    else
-        StatusLabel.Text = isMobile and "AIMLOCK: READY (Tap Button)" or "AIMLOCK: INACTIVE (Press F)"
-        StatusLabel.TextColor3 = Color3.new(1, 1, 1)
+        if not Aimlock.Target or not Aimlock.Target.Character then
+            Aimlock.Target = GetTargetUnderCrosshair()
+            if not Aimlock.Target then
+                ToggleAimlock() -- Auto-disable if target is lost
+                return
+            end
+        end
+
+        local targetPart = Aimlock.Target.Character:FindFirstChild(Aimlock.LockPart)
+        if targetPart then
+            -- Force camera lock
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPart.Position)
+            UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+            if Player.Character and Player.Character:FindFirstChildOfClass("Humanoid") then
+                Player.Character:FindFirstChildOfClass("Humanoid").AutoRotate = false
+            end
+        end
     end
-    task.wait(0.1)
-end
+end)
