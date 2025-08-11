@@ -3,42 +3,104 @@ local Player = Players.LocalPlayer
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
+local GuiService = game:GetService("GuiService")
+
+-- Show loading notification
+game.StarterGui:SetCore("SendNotification", {
+    Title = "AIMLOCK SYSTEM",
+    Text = "Loading...",
+    Duration = 3,
+    Icon = "rbxassetid://4457731826"
+})
 
 -- Wait for character
 repeat task.wait() until Player.Character
 local Humanoid = Player.Character:WaitForChild("Humanoid")
 
+-- Mobile detection
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
 -- Aimlock Settings
 local Aimlock = {
     Enabled = false,
     Target = nil,
-    Hotkey = Enum.KeyCode.F,
-    LockPart = "Head", -- Now using Head since we're aiming
+    Hotkey = isMobile and nil or Enum.KeyCode.F, -- No hotkey on mobile
+    LockPart = "Head",
     MaxDistance = 1000,
-    FOV = 30, -- Degrees field of view for aiming
-    Notifications = true
+    FOV = 35, -- Slightly wider FOV for mobile
+    Notifications = true,
+    TouchButton = nil -- For mobile controls
 }
+
+-- Create mobile button if needed
+if isMobile then
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "AimlockMobileUI"
+    ScreenGui.Parent = Player.PlayerGui
+    
+    Aimlock.TouchButton = Instance.new("TextButton")
+    Aimlock.TouchButton.Text = "🔒\nAIMLOCK"
+    Aimlock.TouchButton.Size = UDim2.new(0, 80, 0, 80)
+    Aimlock.TouchButton.Position = UDim2.new(1, -90, 1, -90)
+    Aimlock.TouchButton.AnchorPoint = Vector2.new(1, 1)
+    Aimlock.TouchButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    Aimlock.TouchButton.TextColor3 = Color3.new(1, 1, 1)
+    Aimlock.TouchButton.Font = Enum.Font.GothamBold
+    Aimlock.TouchButton.TextSize = 14
+    Aimlock.TouchButton.ZIndex = 10
+    Aimlock.TouchButton.Parent = ScreenGui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = Aimlock.TouchButton
+    
+    -- Touch button functionality
+    Aimlock.TouchButton.MouseButton1Click:Connect(function()
+        Aimlock.Enabled = not Aimlock.Enabled
+        
+        if Aimlock.Enabled then
+            Aimlock.Target = GetTargetUnderCrosshair()
+            if Aimlock.Target then
+                ShowNotification("🔒 Locked: "..Aimlock.Target.Name)
+                Aimlock.TouchButton.BackgroundColor3 = Color3.fromRGB(80, 0, 120)
+            else
+                Aimlock.Enabled = false
+                ShowNotification("No target in sight")
+                Aimlock.TouchButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+            end
+        else
+            ReleaseLock()
+            Aimlock.TouchButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        end
+    end)
+end
+
+-- Notification wrapper
+local function ShowNotification(message)
+    if not Aimlock.Notifications then return end
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "AIMLOCK",
+        Text = message,
+        Duration = 2
+    })
+end
 
 -- Get player you're aiming at
 local function GetTargetUnderCrosshair()
-    local mousePos = UserInputService:GetMouseLocation()
+    local closestPlayer, closestAngle = nil, math.rad(Aimlock.FOV)
     local viewportSize = Camera.ViewportSize
     local center = Vector2.new(viewportSize.X/2, viewportSize.Y/2)
-    local closestPlayer, closestAngle = nil, math.rad(Aimlock.FOV)
     
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= Player and player.Character then
             local targetPart = player.Character:FindFirstChild(Aimlock.LockPart)
             if targetPart then
-                -- Calculate screen position
                 local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
                 
                 if onScreen then
-                    -- Calculate angle from crosshair
                     local pos2D = Vector2.new(screenPos.X, screenPos.Y)
                     local angle = math.acos((center - pos2D).Unit:Dot(Vector2.new(0, 1)))
                     
-                    -- Check if within FOV and closest
                     if angle < closestAngle then
                         closestAngle = angle
                         closestPlayer = player
@@ -51,53 +113,55 @@ local function GetTargetUnderCrosshair()
     return closestPlayer
 end
 
+-- Release lock function
+local function ReleaseLock()
+    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+    if Humanoid then
+        Humanoid.AutoRotate = true
+    end
+end
+
 -- Strong lock function
 local function ApplyLock()
     if not Aimlock.Enabled or not Aimlock.Target then return end
     
     local targetPart = Aimlock.Target.Character:FindFirstChild(Aimlock.LockPart)
-    if not targetPart then return end
+    if not targetPart then
+        Aimlock.Target = GetTargetUnderCrosshair()
+        return
+    end
     
     -- Force camera lock
     Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPart.Position)
     
     -- Disable mouse movement
     UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
-    Humanoid.AutoRotate = false
+    if Humanoid then
+        Humanoid.AutoRotate = false
+    end
 end
 
--- Toggle system
-UserInputService.InputBegan:Connect(function(input, processed)
-    if input.KeyCode == Aimlock.Hotkey and not processed then
-        Aimlock.Enabled = not Aimlock.Enabled
-        
-        if Aimlock.Enabled then
-            Aimlock.Target = GetTargetUnderCrosshair()
-            if Aimlock.Target then
-                if Aimlock.Notifications then
-                    game.StarterGui:SetCore("SendNotification", {
-                        Title = "🔒 LOCKED ON TARGET",
-                        Text = Aimlock.Target.Name,
-                        Duration = 2
-                    })
+-- PC hotkey system
+if not isMobile then
+    UserInputService.InputBegan:Connect(function(input, processed)
+        if input.KeyCode == Aimlock.Hotkey and not processed then
+            Aimlock.Enabled = not Aimlock.Enabled
+            
+            if Aimlock.Enabled then
+                Aimlock.Target = GetTargetUnderCrosshair()
+                if Aimlock.Target then
+                    ShowNotification("🔒 Locked: "..Aimlock.Target.Name)
+                else
+                    Aimlock.Enabled = false
+                    ShowNotification("No target in sight")
                 end
             else
-                Aimlock.Enabled = false
-                if Aimlock.Notifications then
-                    game.StarterGui:SetCore("SendNotification", {
-                        Title = "NO TARGET IN SIGHT",
-                        Text = "Aim at a player first",
-                        Duration = 2
-                    })
-                end
+                ReleaseLock()
+                ShowNotification("Aimlock disabled")
             end
-        else
-            -- Release controls
-            UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-            Humanoid.AutoRotate = true
         end
-    end
-end)
+    end)
+end
 
 -- Main loop
 RunService.RenderStepped:Connect(function()
@@ -111,12 +175,13 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Simple UI
+-- Status UI
 local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AimlockStatusUI"
 ScreenGui.Parent = Player.PlayerGui
 
 local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Text = "AIMLOCK: INACTIVE (Press F)"
+StatusLabel.Text = isMobile and "AIMLOCK: READY (Tap Button)" or "AIMLOCK: INACTIVE (Press F)"
 StatusLabel.Size = UDim2.new(0, 250, 0, 40)
 StatusLabel.Position = UDim2.new(0.5, -125, 0, 10)
 StatusLabel.AnchorPoint = Vector2.new(0.5, 0)
@@ -133,7 +198,7 @@ while true do
         StatusLabel.Text = "LOCKED: "..(Aimlock.Target and Aimlock.Target.Name or "SEARCHING...")
         StatusLabel.TextColor3 = Color3.new(0, 1, 0)
     else
-        StatusLabel.Text = "AIMLOCK: INACTIVE (Press F)"
+        StatusLabel.Text = isMobile and "AIMLOCK: READY (Tap Button)" or "AIMLOCK: INACTIVE (Press F)"
         StatusLabel.TextColor3 = Color3.new(1, 1, 1)
     end
     task.wait(0.1)
